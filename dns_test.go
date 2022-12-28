@@ -2,22 +2,25 @@ package main
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
 	"net"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/miekg/dns"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 // some integration-style tests
 var connString = "root:mysecretpassword@tcp(localhost:3306)/mysql?tls=false"
 
-func connectTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("mysql", connString)
+func connectTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
+	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return db
+	return db, mock
 }
 
 func makeA(name string, ip string) *dns.A {
@@ -56,50 +59,107 @@ func makeQuestion(name string, qtype uint16) *dns.Msg {
 	}
 }
 
-func TestARecord(t *testing.T) {
-	db := connectTestDB(t)
-	name := randString(10) + ".flatbo.at."
-
-	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
-	// check that we got NOERROR and 1 answer
-	assert.Equal(t, dns.RcodeSuccess, response.Rcode)
-	assert.Equal(t, 1, len(response.Answer))
+type RecordSuite struct {
+	suite.Suite
+	db     *sql.DB
+	mock   sqlmock.Sqlmock
+	prefix string
+	name   string
 }
 
-func TestCNAMERecord(t *testing.T) {
-	db := connectTestDB(t)
-	name := randString(10) + ".flatbo.at."
-	InsertRecord(db, makeCNAME(name, "example.com."))
-	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
-	// check that we got NOERROR and 1 answer
-	assert.Equal(t, dns.RcodeSuccess, response.Rcode)
-	assert.Equal(t, 1, len(response.Answer))
+func (rs *RecordSuite) SetupTest() {
+	rs.db, rs.mock = connectTestDB(rs.T())
+	rs.prefix = randString(10)
+	rs.name = rs.prefix + ".flatbo.at."
 }
 
-func TestHTTPSRecord(t *testing.T) {
-	db := connectTestDB(t)
-	name := randString(10) + ".flatbo.at."
-	InsertRecord(db, makeA(name, "1.2.3.4"))
-	response := dnsResponse(db, makeQuestion(name, dns.TypeHTTPS))
-	// check that we got NOERROR and 1 answer
-	assert.Equal(t, dns.RcodeSuccess, response.Rcode)
-	assert.Equal(t, 1, len(response.Answer))
+func (rs *RecordSuite) scaffoldMocks(rr dns.RR, dnsType uint16) {
+	content, _ := json.Marshal(rr)
+	rs.mock.ExpectBegin()
+	rs.mock.ExpectExec("INSERT INTO dns_records").
+		WithArgs(rs.name, rs.prefix, dnsType, content).
+		WillReturnResult(driver.ResultNoRows)
+	rs.mock.ExpectExec("UPDATE dns_serials").WillReturnResult(driver.ResultNoRows)
+	rs.mock.ExpectQuery("SELECT serial").
+		WillReturnRows(sqlmock.NewRows([]string{"serial"}).AddRow(11))
+	rs.mock.ExpectCommit()
+
+	rows := sqlmock.NewRows([]string{"content"}).AddRow(content)
+	rs.mock.ExpectBegin()
+	rs.mock.ExpectExec("SET TRANSACTION").WillReturnResult(driver.ResultNoRows)
+	rs.mock.ExpectQuery("SELECT content FROM dns_records").
+		WithArgs(rs.name).
+		WillReturnRows(rows)
+	rs.mock.ExpectCommit()
 }
 
-func TestNoError(t *testing.T) {
-	db := connectTestDB(t)
-	name := randString(10) + ".flatbo.at."
-	InsertRecord(db, makeA(name, "1.2.3.4"))
-	response := dnsResponse(db, makeQuestion(name, dns.TypeAAAA))
+func TestRecordSuite(t *testing.T) {
+	suite.Run(t, new(RecordSuite))
+}
+
+func (rs *RecordSuite) TestARecord() {
+	record := makeA(rs.name, "1.2.3.4")
+	rs.scaffoldMocks(record, dns.TypeA)
+
+	err := InsertRecord(rs.db, makeA(rs.name, "1.2.3.4"))
+	rs.NoError(err)
+
+	response := dnsResponse(rs.db, makeQuestion(rs.name, dns.TypeA))
+	// check that we got NOERROR and 1 answer
+	rs.Equal(dns.RcodeSuccess, response.Rcode)
+	rs.Equal(1, len(response.Answer))
+}
+
+func (rs *RecordSuite) TestCNAMERecord() {
+	record := makeCNAME(rs.name, "example.com.")
+	rs.scaffoldMocks(record, dns.TypeCNAME)
+
+	err := InsertRecord(rs.db, record)
+	rs.NoError(err)
+
+	response := dnsResponse(rs.db, makeQuestion(rs.name, dns.TypeA))
+	// check that we got NOERROR and 1 answer
+	rs.Equal(dns.RcodeSuccess, response.Rcode)
+	rs.Equal(1, len(response.Answer))
+}
+
+func (rs *RecordSuite) TestHTTPSRecord() {
+	record := makeA(rs.name, "1.2.3.4")
+	rs.scaffoldMocks(record, dns.TypeA)
+
+	err := InsertRecord(rs.db, record)
+	rs.NoError(err)
+
+	response := dnsResponse(rs.db, makeQuestion(rs.name, dns.TypeHTTPS))
+	// check that we got NOERROR and 1 answer
+	rs.Equal(dns.RcodeSuccess, response.Rcode)
+	rs.Equal(1, len(response.Answer))
+}
+
+func (rs *RecordSuite) TestNoError() {
+	record := makeA(rs.name, "1.2.3.4")
+	rs.scaffoldMocks(record, dns.TypeA)
+
+	err := InsertRecord(rs.db, record)
+	rs.NoError(err)
+
+	response := dnsResponse(rs.db, makeQuestion(rs.name, dns.TypeAAAA))
 	// check that we got NOERROR and 0 answers
-	assert.Equal(t, dns.RcodeSuccess, response.Rcode)
-	assert.Equal(t, 0, len(response.Answer))
+	rs.Equal(dns.RcodeSuccess, response.Rcode)
+	rs.Equal(0, len(response.Answer))
 }
 
-func TestNXDOMAIN(t *testing.T) {
-	db := connectTestDB(t)
-	name := randString(10) + ".flatbo.at."
-	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
+func (rs *RecordSuite) TestNXDOMAIN() {
+	rows := sqlmock.NewRows([]string{"content"})
+	rs.mock.ExpectBegin()
+	rs.mock.ExpectExec("SET TRANSACTION").WillReturnResult(driver.ResultNoRows)
+	rs.mock.ExpectQuery("SELECT content FROM dns_records").
+		WithArgs(rs.name).
+		WillReturnRows(rows)
+	rs.mock.ExpectCommit()
+
+	response := dnsResponse(rs.db, makeQuestion(rs.name, dns.TypeA))
+
 	// check that we got NXDOMAIN
-	assert.Equal(t, dns.RcodeNameError, response.Rcode)
+	rs.Equal(dns.RcodeNameError, response.Rcode)
 }
