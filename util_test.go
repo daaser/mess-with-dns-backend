@@ -7,6 +7,6 @@ import (
 )
 
 func TestExtract(t *testing.T) {
-	assert.Equal(t, ExtractSubdomain("a.b.messwithdns.com."), "b")
+	assert.Equal(t, ExtractSubdomain("a.b.flatbo.at."), "b")
 	assert.Equal(t, ExtractSubdomain("test.com"), "")
 }

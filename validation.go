@@ -22,11 +22,11 @@ func validateDomainName(domain string, username string) error {
 	if _, ok := dns.IsDomainName(domain); !ok {
 		return fmt.Errorf("Invalid domain name: %s", domain)
 	}
-	if !strings.HasSuffix(domain, ".messwithdns.com.") {
-		return fmt.Errorf("Subdomain must end with .messwithdns.com.")
+	if !strings.HasSuffix(domain, ".flatbo.at.") {
+		return fmt.Errorf("Subdomain must end with .flatbo.at.")
 	}
 	// get last component of domain
-	name := strings.TrimSuffix(domain, ".messwithdns.com.")
+	name := strings.TrimSuffix(domain, ".flatbo.at.")
 	subdomain := ExtractSubdomain(domain)
 	if subdomain != username {
 		return fmt.Errorf("Subdomain must be '%s'", username)
@@ -34,8 +34,11 @@ func validateDomainName(domain string, username string) error {
 	if _, ok := disallowedDomains[subdomain]; ok {
 		return fmt.Errorf("Sorry, you're not allowed to make changes to '%s' :)", subdomain)
 	}
-	if strings.Contains(name, "messwithdns") {
-		return fmt.Errorf("You tried to create a record for %s, you probably didn't want that.", domain)
+	if strings.Contains(name, "flatbo.at") {
+		return fmt.Errorf(
+			"You tried to create a record for %s, you probably didn't want that.",
+			domain,
+		)
 	}
 	return nil
 }

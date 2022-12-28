@@ -10,10 +10,10 @@ import (
 )
 
 // some integration-style tests
-var connString = "postgres://postgres:mysecretpassword@localhost:5432/postgres?sslmode=disable"
+var connString = "root:mysecretpassword@tcp(localhost:3306)/mysql?tls=false"
 
 func connectTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("postgres", connString)
+	db, err := sql.Open("mysql", connString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,8 +58,8 @@ func makeQuestion(name string, qtype uint16) *dns.Msg {
 
 func TestARecord(t *testing.T) {
 	db := connectTestDB(t)
-	name := randString(10) + ".messwithdns.com."
-	InsertRecord(db, makeA(name, "1.2.3.4"))
+	name := randString(10) + ".flatbo.at."
+
 	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
 	// check that we got NOERROR and 1 answer
 	assert.Equal(t, dns.RcodeSuccess, response.Rcode)
@@ -68,7 +68,7 @@ func TestARecord(t *testing.T) {
 
 func TestCNAMERecord(t *testing.T) {
 	db := connectTestDB(t)
-	name := randString(10) + ".messwithdns.com."
+	name := randString(10) + ".flatbo.at."
 	InsertRecord(db, makeCNAME(name, "example.com."))
 	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
 	// check that we got NOERROR and 1 answer
@@ -78,7 +78,7 @@ func TestCNAMERecord(t *testing.T) {
 
 func TestHTTPSRecord(t *testing.T) {
 	db := connectTestDB(t)
-	name := randString(10) + ".messwithdns.com."
+	name := randString(10) + ".flatbo.at."
 	InsertRecord(db, makeA(name, "1.2.3.4"))
 	response := dnsResponse(db, makeQuestion(name, dns.TypeHTTPS))
 	// check that we got NOERROR and 1 answer
@@ -88,7 +88,7 @@ func TestHTTPSRecord(t *testing.T) {
 
 func TestNoError(t *testing.T) {
 	db := connectTestDB(t)
-	name := randString(10) + ".messwithdns.com."
+	name := randString(10) + ".flatbo.at."
 	InsertRecord(db, makeA(name, "1.2.3.4"))
 	response := dnsResponse(db, makeQuestion(name, dns.TypeAAAA))
 	// check that we got NOERROR and 0 answers
@@ -98,7 +98,7 @@ func TestNoError(t *testing.T) {
 
 func TestNXDOMAIN(t *testing.T) {
 	db := connectTestDB(t)
-	name := randString(10) + ".messwithdns.com."
+	name := randString(10) + ".flatbo.at."
 	response := dnsResponse(db, makeQuestion(name, dns.TypeA))
 	// check that we got NXDOMAIN
 	assert.Equal(t, dns.RcodeNameError, response.Rcode)

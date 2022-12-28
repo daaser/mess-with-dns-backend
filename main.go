@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -15,10 +15,16 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/miekg/dns"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		panic("Error loading .env file")
+	}
+
 	if env := os.Getenv("SENTRY_DSN"); env != "" {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn: env,
@@ -73,7 +79,7 @@ type handler struct {
 var soaSerial uint32
 
 func makeDomain(name string) string {
-	return name + ".messwithdns.com."
+	return name + ".flatbo.at."
 }
 
 func returnError(w http.ResponseWriter, err error, status int) {
@@ -110,7 +116,8 @@ func getRequests(db *sql.DB, username string, w http.ResponseWriter, r *http.Req
 
 func streamRequests(db *sql.DB, subdomain string, w http.ResponseWriter, r *http.Request) {
 	// create websocket connection
-	conn, err := websocket.Upgrade(w, r, nil, 1024, 1024)
+	upgrader := websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		err := fmt.Errorf("Error creating websocket connection: %s", err.Error())
 		returnError(w, err, http.StatusInternalServerError)
@@ -121,15 +128,13 @@ func streamRequests(db *sql.DB, subdomain string, w http.ResponseWriter, r *http
 	defer stream.Delete()
 	c := stream.Get()
 	for {
-		select {
-		case msg := <-c:
-			conn.WriteMessage(websocket.TextMessage, msg)
-		}
+		msg := <-c
+		conn.WriteMessage(websocket.TextMessage, msg)
 	}
 }
 
 func createRecord(db *sql.DB, username string, w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		err := fmt.Errorf("Error reading body: %s", err.Error())
 		returnError(w, err, http.StatusInternalServerError)
@@ -168,9 +173,13 @@ func updateRecord(db *sql.DB, username string, id string, w http.ResponseWriter,
 		returnError(w, fmt.Errorf("Error parsing id: %s", err.Error()), http.StatusBadRequest)
 		return
 	}
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		returnError(w, fmt.Errorf("Error reading body: %s", err.Error()), http.StatusInternalServerError)
+		returnError(
+			w,
+			fmt.Errorf("Error reading body: %s", err.Error()),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	rr, err := ParseRecord(body)
@@ -188,12 +197,20 @@ func updateRecord(db *sql.DB, username string, id string, w http.ResponseWriter,
 func getDomains(db *sql.DB, username string, w http.ResponseWriter, r *http.Request) {
 	records, err := GetRecordsForName(db, username)
 	if err != nil {
-		returnError(w, fmt.Errorf("Error getting records: %s", err.Error()), http.StatusInternalServerError)
+		returnError(
+			w,
+			fmt.Errorf("Error getting records: %s", err.Error()),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	jsonOutput, err := json.Marshal(records)
 	if err != nil {
-		returnError(w, fmt.Errorf("Error marshalling json: %s", err.Error()), http.StatusInternalServerError)
+		returnError(
+			w,
+			fmt.Errorf("Error marshalling json: %s", err.Error()),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -203,7 +220,11 @@ func getDomains(db *sql.DB, username string, w http.ResponseWriter, r *http.Requ
 func requireLogin(username string, w http.ResponseWriter) bool {
 	w.Header().Set("Cache-Control", "no-store")
 	if username == "" {
-		returnError(w, fmt.Errorf("You must be logged in to access this page"), http.StatusUnauthorized)
+		returnError(
+			w,
+			fmt.Errorf("You must be logged in to access this page"),
+			http.StatusUnauthorized,
+		)
 		return false
 	}
 	return true
@@ -219,11 +240,11 @@ func (handle *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := strings.Split(r.URL.Path, "/")[1:]
 	n := len(p)
 	switch {
-	// check host header for messwithdns.com
-	case r.Host == "messwithdns.com" || r.Host == "www.messwithdns.com":
+	// check host header for flatbo.at
+	case r.Host == "flatbo.at" || r.Host == "www.flatbo.at":
 		// redirect to .net
-		http.Redirect(w, r, "https://messwithdns.net"+r.URL.Path, http.StatusFound)
-	// GET /domain: get everything from USERNAME.messwithdns.com.
+		http.Redirect(w, r, "https://flatbo.at"+r.URL.Path, http.StatusFound)
+	// GET /domains: get everything from USERNAME.flatbo.at.
 	case r.Method == "GET" && p[0] == "domains":
 		if !requireLogin(username, w) {
 			return

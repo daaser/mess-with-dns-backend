@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -24,7 +25,7 @@ func getSecureCookie() *securecookie.SecureCookie {
 	if err != nil {
 		panic(err)
 	}
-	hashKey := []byte(decoded)
+	hashKey := decoded
 	if len(hashKey) != 32 {
 		panic("HASH_KEY must be 32 bytes")
 	}
@@ -32,7 +33,7 @@ func getSecureCookie() *securecookie.SecureCookie {
 	if err != nil {
 		panic(err)
 	}
-	blockKey := []byte(decoded)
+	blockKey := decoded
 	if len(blockKey) != 32 {
 		panic("BLOCK_KEY must be 32 bytes")
 	}
@@ -48,13 +49,13 @@ func oauthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	conf := oauthConfig()
 	// exchange code for token
-	token, err := conf.Exchange(oauth2.NoContext, code)
+	token, err := conf.Exchange(context.Background(), code)
 	if err != nil {
 		returnError(w, err, http.StatusInternalServerError)
 		return
 	}
 	// get user name
-	client := conf.Client(oauth2.NoContext, token)
+	client := conf.Client(context.Background(), token)
 	resp, err := client.Get("https://api.github.com/user")
 	if err != nil {
 		returnError(w, err, http.StatusInternalServerError)

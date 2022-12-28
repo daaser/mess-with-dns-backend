@@ -18,10 +18,14 @@ func lookupRecords(db *sql.DB, name string, qtype uint16) ([]dns.RR, int, error)
 }
 
 func dnsResponse(db *sql.DB, request *dns.Msg) *dns.Msg {
-	if !strings.HasSuffix(request.Question[0].Name, "messwithdns.com.") {
+	if !strings.HasSuffix(request.Question[0].Name, "flatbo.at.") {
 		return refusedResponse(request)
 	}
-	records, totalRecords, err := lookupRecords(db, request.Question[0].Name, request.Question[0].Qtype)
+	records, totalRecords, err := lookupRecords(
+		db,
+		request.Question[0].Name,
+		request.Question[0].Qtype,
+	)
 	if err != nil {
 		msg := errorResponse(request)
 		fmt.Println("Error getting records:", err)
@@ -80,36 +84,36 @@ var records = map[string]dns.RR{
 		},
 		A: net.ParseIP("1.2.3.4"),
 	},
-	"orange.messwithdns.com.": &dns.A{
+	"orange.flatbo.at.": &dns.A{
 		Hdr: dns.RR_Header{
-			Name:   "orange.messwithdns.com.",
+			Name:   "orange.flatbo.at.",
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
 			Ttl:    3600,
 		},
 		A: net.ParseIP("213.188.218.160"),
 	},
-	"purple.messwithdns.com.": &dns.A{
+	"purple.flatbo.at.": &dns.A{
 		Hdr: dns.RR_Header{
-			Name:   "purple.messwithdns.com.",
+			Name:   "purple.flatbo.at.",
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
 			Ttl:    3600,
 		},
 		A: net.ParseIP("213.188.209.192"),
 	},
-	"www.messwithdns.com": &dns.A{
+	"www.flatbo.at": &dns.A{
 		Hdr: dns.RR_Header{
-			Name:   "messwithdns.com.",
+			Name:   "flatbo.at.",
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
 			Ttl:    60,
 		},
 		A: net.ParseIP("213.188.214.254"),
 	},
-	"messwithdns.com.": &dns.A{
+	"flatbo.at.": &dns.A{
 		Hdr: dns.RR_Header{
-			Name:   "messwithdns.com.",
+			Name:   "flatbo.at.",
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
 			Ttl:    60,
@@ -125,7 +129,7 @@ func specialRecords(name string, qtype uint16) []dns.RR {
 		}
 	}
 	// special case for SOA
-	if qtype == dns.TypeSOA && name == "messwithdns.com." {
+	if qtype == dns.TypeSOA && name == "flatbo.at." {
 		return []dns.RR{getSOA(soaSerial)}
 	}
 	return nil
@@ -134,13 +138,13 @@ func specialRecords(name string, qtype uint16) []dns.RR {
 func getSOA(serial uint32) *dns.SOA {
 	var soa = dns.SOA{
 		Hdr: dns.RR_Header{
-			Name:   "messwithdns.com.",
+			Name:   "flatbo.at.",
 			Rrtype: dns.TypeSOA,
 			Class:  dns.ClassINET,
 			Ttl:    300, /* RFC 1035 says soa records always should have a ttl of 0 but cloudflare doesn't seem to do that*/
 		},
-		Ns:      "ns1.messwithdns.com.",
-		Mbox:    "julia.wizardzines.com.",
+		Ns:      "ns1.flatbo.at.",
+		Mbox:    "aaser.net.",
 		Serial:  serial,
 		Refresh: 3600,
 		Retry:   3600,

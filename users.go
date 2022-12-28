@@ -4,14 +4,20 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func getExistingSubdomains(db *sql.DB, word string) ([]string, error) {
 	var subdomains []string
-	rows, err := db.Query("SELECT name FROM subdomains WHERE name LIKE $1", word+"%")
+	rows, err := db.Query("SELECT name FROM subdomains WHERE name LIKE ?", word+"%")
 	if err != nil {
 		return subdomains, err
 	}
@@ -24,6 +30,14 @@ func getExistingSubdomains(db *sql.DB, word string) ([]string, error) {
 		subdomains = append(subdomains, name)
 	}
 	return subdomains, nil
+}
+
+func subdomainExists(db *sql.DB, word string) bool {
+	domains, err := getExistingSubdomains(db, word)
+	if err != nil || len(domains) != 0 {
+		return true
+	}
+	return false
 }
 
 //go:embed words.json
@@ -59,13 +73,13 @@ func randomWord() string {
 
 func smallestMissing(prefix string, existing []string) string {
 	// omg it's smallest missing omg omg omg
-	map_existing := make(map[string]bool)
+	mapExisting := make(map[string]bool)
 	for _, subdomain := range existing {
-		map_existing[subdomain] = true
+		mapExisting[subdomain] = true
 	}
 	for i := 5; ; i++ {
 		subdomain := fmt.Sprintf("%s%d", prefix, i)
-		if _, ok := map_existing[subdomain]; !ok {
+		if _, ok := mapExisting[subdomain]; !ok {
 			return subdomain
 		}
 	}
@@ -73,12 +87,16 @@ func smallestMissing(prefix string, existing []string) string {
 
 func insertAvailableSubdomain(db *sql.DB) (string, error) {
 	prefix := randomWord()
-	existing, err := getExistingSubdomains(db, prefix)
-	if err != nil {
-		return "", err
+	if subdomainExists(db, prefix) {
+		return "", errors.New("subdomain exists")
 	}
-	subdomain := smallestMissing(prefix, existing)
-	_, err = db.Exec("INSERT INTO subdomains (name) VALUES ($1)", subdomain)
+	//existing, err := getExistingSubdomains(db, prefix)
+	//if err != nil {
+	//	return "", err
+	//}
+	//subdomain := smallestMissing(prefix, existing)
+	subdomain := prefix
+	_, err := db.Exec("INSERT INTO subdomains (name) VALUES (?)", subdomain)
 	if err != nil {
 		return "", err
 	}
