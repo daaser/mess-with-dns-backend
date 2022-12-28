@@ -240,10 +240,6 @@ func (handle *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := strings.Split(r.URL.Path, "/")[1:]
 	n := len(p)
 	switch {
-	// check host header for flatbo.at
-	case r.Host == "flatbo.at" || r.Host == "www.flatbo.at":
-		// redirect to .net
-		http.Redirect(w, r, "https://flatbo.at"+r.URL.Path, http.StatusFound)
 	// GET /domains: get everything from USERNAME.flatbo.at.
 	case r.Method == "GET" && p[0] == "domains":
 		if !requireLogin(username, w) {
