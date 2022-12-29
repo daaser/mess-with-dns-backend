@@ -17,26 +17,26 @@ var disallowedDomains = map[string]bool{
 
 func validateDomainName(domain string, username string) error {
 	if !strings.HasSuffix(domain, ".") {
-		return fmt.Errorf("Domain must end with a period")
+		return fmt.Errorf("domain must end with a period")
 	}
 	if _, ok := dns.IsDomainName(domain); !ok {
-		return fmt.Errorf("Invalid domain name: %s", domain)
+		return fmt.Errorf("invalid domain name: %s", domain)
 	}
 	if !strings.HasSuffix(domain, ".flatbo.at.") {
-		return fmt.Errorf("Subdomain must end with .flatbo.at.")
+		return fmt.Errorf("subdomain must end with .flatbo.at")
 	}
 	// get last component of domain
 	name := strings.TrimSuffix(domain, ".flatbo.at.")
 	subdomain := ExtractSubdomain(domain)
 	if subdomain != username {
-		return fmt.Errorf("Subdomain must be '%s'", username)
+		return fmt.Errorf("subdomain must be '%s'", username)
 	}
 	if _, ok := disallowedDomains[subdomain]; ok {
-		return fmt.Errorf("Sorry, you're not allowed to make changes to '%s' :)", subdomain)
+		return fmt.Errorf("sorry, you're not allowed to make changes to '%s' :)", subdomain)
 	}
 	if strings.Contains(name, "flatbo.at") {
 		return fmt.Errorf(
-			"You tried to create a record for %s, you probably didn't want that.",
+			"you tried to create a record for %s, you probably didn't want that",
 			domain,
 		)
 	}

@@ -12,9 +12,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// some integration-style tests
-var connString = "root:mysecretpassword@tcp(localhost:3306)/mysql?tls=false"
-
 func connectTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

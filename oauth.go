@@ -44,7 +44,7 @@ func oauthCallback(w http.ResponseWriter, r *http.Request) {
 	// get code from query
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		returnError(w, fmt.Errorf("Code not found"), http.StatusBadRequest)
+		returnError(w, fmt.Errorf("code not found"), http.StatusBadRequest)
 		return
 	}
 	conf := oauthConfig()
